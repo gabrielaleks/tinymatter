@@ -1,2 +1,2 @@
 # Tiny Matter
-Lightweight Matter controller used to comissioning and controlling devices.
+Lightweight Matter controller used for comissioning and controlling devices.
