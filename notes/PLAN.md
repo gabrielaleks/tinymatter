@@ -164,7 +164,7 @@ Follow the same GitHub Actions pattern as lista:
 
 1. [x] Create `NOTES.md` with initial structure
 2. [x] Create `PLAN.md`
-3. [ ] Read all Phase 0 resources — log key concepts and resources in NOTES.md
+3. [x] Read all Phase 0 resources — log key concepts and resources in NOTES.md
 4. [ ] Run the matter.js controller example locally to understand the API — log discoveries
 5. [ ] Open commissioning window on one lamp via HA and commission it via the matter.js CLI example — verify you can read its state and toggle it — log the exact steps taken
 6. [ ] Build the controller TypeScript service (matter-client + device-service + REST routes)
