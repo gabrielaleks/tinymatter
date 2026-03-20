@@ -77,6 +77,53 @@ POST /api/devices/commission        body: { pairingCode: "..." }
 
 ---
 
+## Getting the lamps onto Matter
+
+When I started this project I had been controlling my WiZ lamps through Home Assistant's WiZ integration without thinking much about it. I assumed "WiZ lamps with a Matter logo on the box" meant I was already using Matter — but I wasn't. HA's WiZ integration talks to the lamps over WiZ's own proprietary protocol, a UDP-based local/cloud system that has nothing to do with Matter. Matter is a completely separate, open standard for smart home interoperability. The two protocols are different in both design and purpose:
+
+- **WiZ protocol** — proprietary, cloud-assisted, UDP-based. Owned by Signify (Philips). Works out of the box with the WiZ app and HA's WiZ integration.
+- **Matter** — open standard, IP-based (Wi-Fi, Thread, Ethernet), fully local. Devices are commissioned into a cryptographic fabric and communicate directly with controllers over the local network, no cloud required.
+
+The good news is that WiZ lamps run both stacks simultaneously and independently on the same firmware. They're Matter-certified — the box includes a QR code specifically for Matter commissioning — while also supporting the WiZ protocol in parallel. This means I can control the lamps via Matter with my custom controller and they'll continue to work with HA's WiZ integration and the WiZ app at the same time, all staying in sync because they're all talking to the same physical device.
+
+### Commissioning the lamps via Matter
+
+To use a lamp with Matter, it first needs to be commissioned into a Matter fabric. The QR code printed inside the box is the Matter commissioning code — it's used exactly once for first-time pairing. I factory reset a lamp (to clear any previous Matter state) and then scanned the QR code with my phone using **Apple Home**, which became the first fabric admin for that lamp.
+
+### Adding HA to the fabric via multi-admin
+
+With the lamp now in Apple Home's fabric, the next step was adding Home Assistant as a second controller using multi-admin commissioning. I generated a one-time pairing code from Apple Home and gave it to HA's Matter integration, which joined the same fabric without requiring another factory reset.
+
+However, since I run HA as a plain Docker container (not HA OS or Supervised), the add-on store isn't available. HA's Matter integration requires a separate **Matter Server** process to do the heavy lifting — normally installed as an add-on, but in my case I had to run it as its own container.
+
+I added a `matter-server` service to HA's `docker-compose.yaml`:
+
+```yaml
+matter-server:
+  container_name: matter-server
+  image: ghcr.io/home-assistant-libs/python-matter-server:stable
+  restart: unless-stopped
+  security_opt:
+    - apparmor:unconfined
+  volumes:
+    - ./matter-data:/data
+    - /run/dbus:/run/dbus:ro
+  network_mode: host
+```
+
+It uses `network_mode: host` because Matter relies on mDNS multicast for device discovery, and mDNS multicast traffic doesn't cross Docker bridge network boundaries — host networking is the straightforward fix for this.
+
+This introduced a second problem: because `matter-server` is on the host network and HA is on the `traefik` bridge network, `localhost` inside the HA container resolves to the container itself, not the host machine. So the pre-filled WebSocket URL (`ws://localhost:5580/ws`) that HA suggests for the Matter integration doesn't work. The fix is to add `extra_hosts` to the HA service so it can resolve the host machine via a stable hostname:
+
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
+
+With that in place, the Matter integration URL becomes `ws://host.docker.internal:5580/ws` and the connection succeeds.
+
+---
+
 ## Open questions / future blog angles
 
 - How does multi-fabric commissioning work in practice? What happens when two controllers send conflicting commands?
