@@ -1,62 +1,92 @@
 /**
- * Adapted from @matter/examples src/control-onoff/OnOffController.ts
- *
- * Fixed process.argv parsing: the original uses `process.argv.slice(2)` and then
- * destructures with `[, , command]`, skipping two elements — which worked with the
- * compiled binary but not with tsx (tsx sets argv[1] to the script path, so
- * slice(2) only contains user args and the double-skip lands on undefined).
+ * @license
+ * Copyright 2022-2025 Matter.js Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ServerNode } from '@matter/main'
-import { OnOffClient } from '@matter/main/behaviors/on-off';
+/**
+ * This is simple command line application that demonstrates device control using the @matter/node API.
+ *
+ * This API is a work in progress and is not yet fully implemented.
+ *
+ * Adapted for tsx:
+ * - Wrapped in async main() since top-level await requires ESM ("type": "module" in package.json)
+ * - Fixed process.argv parsing: tsx sets argv[1] to the script path, so slice(2) already gives user args
+ * - Updated controller.nodes → controller.peers (@matter/main 0.16.x API change)
+ */
+
+import "@matter/main/platform";
+import { ServerNode } from "@matter/main";
+import { OnOffClient } from "@matter/main/behaviors/on-off";
 
 async function main() {
+    // Create the controller
     const controller = await ServerNode.create();
 
     const [command, ...args] = process.argv.slice(2);
 
     switch (command) {
-        case "commission":
-            if (controller.nodes.get("device")) {
+        case "commission": {
+            // Validation
+            if (controller.peers.get("device")) {
                 die("There is already a device commissioned");
             }
             if (args.length !== 1) {
                 die(`Usage: tsx ${process.argv[1]} commission <pairingcode>`);
             }
-            await controller.nodes.commission({ id: "device", pairingCode: args[0] });
-            break;
+            const [pairingCode] = args;
 
-        case "toggle": {
-            const endpointNo = Number.parseInt(args[0]);
-            if (args.length !== 1 || Number.isNaN(endpointNo)) {
-                die(`Usage: tsx ${process.argv[1]} toggle <endpoint number>`);
-            }
-            const node = controller.nodes.get("device");
-            if (node === undefined) {
-                die("Cannot toggle because there is no commissioned device");
-            }
-            const endpoint = node.parts.get(endpointNo);
-            if (endpoint === undefined) {
-                die(`Cannot toggle because endpoint ${endpointNo} does not exist`);
-            }
-            await endpoint.commandsOf(OnOffClient).toggle();
+            // This is the actual commissioning
+            await controller.peers.commission({ id: "device", pairingCode });
+
             break;
         }
 
-        case "decommission": {
-            const node = controller.nodes.get("device");
-            if (node === undefined) {
-                die("Cannot decommission because there is no commissioned device");
+        case "toggle":
+            {
+                // Validation
+                const endpointNo = Number.parseInt(args[0]);
+                if (args.length !== 1 || Number.isNaN(endpointNo)) {
+                    die(`Usage: tsx ${process.argv[1]} toggle <endpoint number>`);
+                }
+                const node = controller.peers.get("device");
+                if (node === undefined) {
+                    die("Cannot toggle because there is no commissioned device");
+                }
+                const endpoint = node.parts.get(endpointNo);
+                if (endpoint === undefined) {
+                    die(`Cannot toggle because endpoint ${endpointNo} does not exist`);
+                }
+
+                // Invocation
+                await endpoint.commandsOf(OnOffClient).toggle();
             }
-            await node.delete();
+
             break;
-        }
+
+        case "decommission":
+            {
+                // Validation
+                const node = controller.peers.get("device");
+                if (node === undefined) {
+                    die("Cannot decommission because there is no commissioned device");
+                }
+
+                // Decommission
+                await node.delete();
+            }
+            break;
 
         default:
-            die(`Unsupported command "${command ?? "(none)"}". Supported commands: commission, toggle, decommission`);
+            die(
+                `Unsupported command "${command ?? "(none)"}". Supported commands: commission, toggle, decommission`,
+            );
     }
 }
 
+/**
+ * Report command line error and exit.
+ */
 function die(message: string): never {
     console.log(message);
     process.exit(1);

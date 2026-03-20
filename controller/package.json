@@ -36,8 +36,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@matter/examples": "0.15.6",
-    "@matter/main": "0.15.6",
+    "@matter/main": "^0.16.10",
+    "@matter/nodejs": "^0.16.10",
     "cors": "^2.8.6",
     "date-fns-tz": "^3.2.0",
     "dotenv": "^17.2.3",
